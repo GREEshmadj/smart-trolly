@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Smart Trolley</title>
+    
+        <!-- Include QuaggaJS -->
+        <script src="https://rawgit.com/serratus/quaggaJS/master/dist/quagga.min.js"></script>
+    
+        <!-- Include JsBarcode -->
+        <script src="https://cdn.jsdelivr.net/jsbarcode/3.11.0/JsBarcode.all.min.js"></script>
+    </head>
+<body>
+    <h1>Smart Trolley</h1>
+
+    <div>
+        <label for="item_name">Item Name:</label>
+        <input type="text" id="item_name" required>
+        
+        <label for="quantity">Quantity:</label>
+        <input type="number" id="quantity" value="1" required>
+        
+        <button onclick="generateBarcode()">Generate Barcode</button>
+    </div>
+
+    <div id="barcodeScanner" style="display: none;"></div>
+
+    <div>
+        <label for="price">Price:</label>
+        <input type="number" id="price" required>
+
+        <button onclick="addToCart()">Add to Cart</button>
+    </div>
+
+    <h2>Shopping Cart:</h2>
+    <ul id="cartList"></ul>
+
+    <p>Total Amount: $<span id="totalAmount">0</span></p>
+
+    <script>
+        const barcodeScanner = document.getElementById('barcodeScanner');
+        const item_name = document.getElementById('item_name');
+        const quantity = document.getElementById('quantity');
+        const price = document.getElementById('price');
+        const cartList = document.getElementById('cartList');
+        const totalAmount = document.getElementById('totalAmount');
+
+        function generateBarcode() {
+            // Generate barcode using JsBarcode library
+            JsBarcode("#barcodeScanner", item_name.value, {
+                format: "CODE128",
+                displayValue: false,
+                width: 2,
+                height: 60,
+            });
+        }
+
+        function startBarcodeScanner() {
+            barcodeScanner.style.display = 'block';
+            Quagga.init({
+                inputStream: {
+                    name: "Live",
+                    type: "LiveStream",
+                    target: barcodeScanner,
+                    constraints: {
+                        width: 640,
+                        height: 480,
+                        facingMode: "environment",
+                    },
+                },
+                decoder: {
+                    readers: ["ean_reader"],
+                },
+            });
+
+            Quagga.start();
+            Quagga.onDetected(handleBarcodeScan);
+        }
+
+        function handleBarcodeScan(result) {
+            const scannedBarcode = result.codeResult.code;
+            item_name.value = scannedBarcode;
+            sendBarcodeData(scannedBarcode);
+            stopBarcodeScanner();
+        }
+
+        function sendBarcodeData(barcode) {
+            // Send barcode data to your server (Flask in this example)
+            fetch('/process_barcode', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    barcode: barcode,
+                    quantity: parseInt(quantity.value, 10),
+                    price: parseFloat(price.value),
+                }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Handle the response from the server if needed
+                console.log(data);
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+        }
+
+        function stopBarcodeScanner() {
+            Quagga.stop();
+            barcodeScanner.style.display = 'none';
+        }
+
+        function addToCart() {
+            const itemName = item_name.value;
+            const itemQuantity = parseInt(quantity.value, 10);
+            const itemPrice = parseFloat(price.value);
+            const totalItemCost = itemQuantity * itemPrice;
+
+            // Update cart details on the page
+            const li = document.createElement('li');
+            li.innerText = `${itemName} - Quantity: ${itemQuantity} | Price: $${itemPrice.toFixed(2)} | Total: $${totalItemCost.toFixed(2)}`;
+            cartList.appendChild(li);
+
+            // Update total amount
+            const currentTotal = parseFloat(totalAmount.innerText);
+            totalAmount.innerText = (currentTotal + totalItemCost).toFixed(2);
+
+            // Clear input fields and barcode
+            item_name.value = '';
+            quantity.value = '1';
+            price.value = '';
+            barcodeScanner.innerHTML = '';
+        }
+    </script>
+
+    <button onclick="startBarcodeScanner()">Start Barcode Scanner</button>
+</body>
+</html>
